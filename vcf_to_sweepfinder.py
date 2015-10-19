@@ -14,17 +14,42 @@ except IndexError:
 
 sample_name = vcf_in.split("/")[-1].split(".")[0]
 
+def read_fasta(filename):
+    fasta = {}
+    with open(filename) as file_one:
+        for line in file_one:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith(">"):
+                active_sequence_name = line[1:]
+                if active_sequence_name not in fasta:
+                    fasta[active_sequence_name] = []
+                    continue
+            sequence = line
+            fasta[active_sequence_name].append(sequence)
+    return fasta
+
 with open(vcf_in,'r') as tsvin:
     tsvin = csv.reader(tsvin, delimiter='\t')
     sweep_out = csv.writer(open(sample_name+".sf.txt", 'w'), delimiter='\t', lineterminator="\n")
-#    sweep_out = open(sample_name+".sf.txt", 'w')
     sweep_out.writerow(["position","x","n","folded"])
     for line in tsvin:
-        if line[0] == "1":
+        if line[0] == "1": #only do chromosome 1, change this later
             position = line[1]
-            x = line[7].split(";")[0].split("=")[1]
-            if "," in x:
-                x=x.count(",")
-            n = line[7].split(";")[1].split("=")[1]
-            folded = 0
+            x = line[7].split(";")[1].split("=")[1] #the AN field
+            n = x
+            if "." in line[9:]: # if there's missing data in any genotype field
+                genotypes = line[9:] # iterate over the genotypes
+                    for idx, genotype in enumerate(genotypes):
+                        if genotype == ".":
+                            mask = read_fasta(sys.argv[2+idx]) #use sample index to find mask file (provided by input)
+                            try:
+                                mask_val = mask['Chr'+"1"][0][int(position)-1]
+                            except IndexError:
+                                print "IndexError when assigning mask_val. Position may not exist in mask. Assigning N to that position."
+                            if mask_val == "1":
+                                n = n + 1
+                
+            folded = 1
             sweep_out.writerow([position,x,n,folded])
