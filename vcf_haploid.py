@@ -16,7 +16,7 @@ except IndexError:
     sys.exit(1)
 
 sample_name = vcf_in.split("/")[-1]+".diploid.vcf"
-
+num_samples = len(sys.argv[2:])
 def read_fasta(filename):
     fasta = {}
     with open(filename) as file_one:
@@ -41,31 +41,42 @@ with open(vcf_in,'r') as tsvin:
     tsvin = csv.reader(tsvin, delimiter='\t')
     vcf_out = csv.writer(open(sample_name, 'w'), delimiter='\t', lineterminator="\n")
     
-    for _ in xrange(7):
-        next(tsvin)
-    header=next(tsvin)
-    vcf_out.writerow(header)
+#    for _ in xrange(7):
+#        next(tsvin)
+#    header=next(tsvin)
+#    vcf_out.writerow(header)
     for row in tsvin:
-        chr,pos,id,ref,alt,qual,filter,info,format=row[0:9]
-        out = [chr,pos,id,ref,alt,qual,filter,info,format]
+        if '##' in row:
+            continue
+        if '#CHROM' in row:
+            print row
+            vcf_out.writerow(row)
+            continue
+        chrom,pos,id,ref,alt,qual,filter,info,format=row[0:9]
+        out = [chrom,pos,id,ref,alt,qual,filter,info,format]
         haplotypes = row[9:]
         if "." in haplotypes:
-            for call in haplotypes:
+            for mask_to_check,call in enumerate(haplotypes):
                 mask_val="NA"
-                indices = [i for i, x in enumerate(haplotypes) if x == "."]
-                if call == ".":
-                    for mask_to_check in indices:
-                        try:
-                            mask_val = mask_list[mask_to_check]['Chr'+chr][0][int(pos)-1]
-                        except IndexError:
-                            out.append(".|.")
-                        if mask_val == "0":
-                            out.append(".|.")
-                        elif mask_val == "1":
-                            out.append("0|0")
+                try:
+                    mask_val = mask_list[mask_to_check]['Chr'+chrom][0][int(pos)-1]
+                except IndexError:
+                    mask_val = "0"
+                if mask_val == "1" and call ==".":
+                    out.append("0|0")
                 elif call == "1":
                     out.append("1|1")
-                else:
+                elif call == "2":
+                    out.append("2|2")
+                elif call == "3":
+                    out.append("3|3")
+                elif mask_val == "0" and call == ".":
                     out.append(".|.")
-
-        vcf_out.writerow(out)
+        elif "." not in haplotypes:
+            for hap in haplotypes:
+                out.append("1|1")
+        if len(out) == 9+num_samples:
+            vcf_out.writerow(out)
+        else:
+            print "Wrong number of genotypes: "+ " ".join(out)
+            sys.exit(0)
