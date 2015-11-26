@@ -4,10 +4,20 @@
 # masks should be in same order as vcf file samples
 import sys
 import csv
+import argparse
+
+
+parser = argparse.ArgumentParser(description="fills in missing genotype information in a merged haploid vcf")
+parser.add_argument("-v", "--vcf", action="store", required=True, help="Input VCF file. Should be a merged vcf with haploid calls (i.e. vcf-merge 1.vcf 2.vcf > 1.2.vcf)")
+parser.add_argument("-m", "--mask", action="store", required=True, help="A file containing paths to mask files. Mask files should come from Andrea's pipeline or Shore. Needs to be in the same order as the vcf samples. Will not produce an error if these are mismatched so you should check.")
+parser.add_argument("-d", "--diploid", action="store_true", help="If set, will output genotypes as 1|1 instead of 1")
+
+args = parser.parse_args()
 
 try:
     #vcf_in = open(sys.argv[1])
-    vcf_in = sys.argv[1]
+#    vcf_in = sys.argv[1]
+    vcf_in = args.vcf
 except IOError:
     print "Sample not found!"
     sys.exit(1)
@@ -16,7 +26,7 @@ except IndexError:
     sys.exit(1)
 
 sample_name = vcf_in.split("/")[-1]+".diploid.vcf"
-num_samples = len(sys.argv[2:])
+#num_samples = len(sys.argv[2:])
 def read_fasta(filename):
     fasta = {}
     with open(filename) as file_one:
@@ -34,24 +44,26 @@ def read_fasta(filename):
     return fasta
 
 mask_list = []
-for  maskfile in sys.argv[2:]:
-    mask_list.append(read_fasta(maskfile))
+with open(args.mask) as f:
+    m = f.read().splitlines()
+    for mask in m:
+        mask_list.append(read_fasta(mask))
+num_samples = len(mask_list)
+#for maskfile in sys.argv[2:]:
+#    mask_list.append(read_fasta(maskfile))
 
 with open(vcf_in,'r') as tsvin:
     tsvin = csv.reader(tsvin, delimiter='\t')
     vcf_out = csv.writer(open(sample_name, 'w'), delimiter='\t', lineterminator="\n")
     
-#    for _ in xrange(7):
-#        next(tsvin)
-#    header=next(tsvin)
-#    vcf_out.writerow(header)
     for row in tsvin:
-        if '##' in row:
+        if any('##' in strings for strings in row):
             continue
-        if '#CHROM' in row:
+        if any('#CHROM' in strings for strings in row):
             print row
             vcf_out.writerow(row)
             continue
+        
         chrom,pos,id,ref,alt,qual,filter,info,format=row[0:9]
         out = [chrom,pos,id,ref,alt,qual,filter,info,format]
         haplotypes = row[9:]
